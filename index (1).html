@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Finance Management</title>
+
+<!-- Web App Manifest & Mobile Metadata -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#101a17">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Finance">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+
+<!-- Google Identity Services & GAPI Client -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#101a17; --paper:#f4f1ea; --panel:#ffffff; --head:#ece6d6;
+  --credit:#2e7d5b; --debit:#b5533c; --card:#a4832a;
+  --line:#d8d0ba; --muted:#6b6455;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--ink:#eee8db;--paper:#12100c;--panel:#1c1912;--head:#241f16;--line:#3a3423;--muted:#a29a84;}
+}
+:root[data-theme="dark"]{--ink:#eee8db;--paper:#12100c;--panel:#1c1912;--head:#241f16;--line:#3a3423;--muted:#a29a84;}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+h1,h2{font-family:'Fraunces',serif;font-weight:600;margin:0;}
+.num{font-family:'IBM Plex Mono',monospace;}
+header{padding:20px 20px 8px;max-width:1200px;margin:0 auto;}
+header h1{font-size:24px;}
+header p{color:var(--muted);margin:4px 0 0;font-size:13px;}
+.wrap{max-width:1200px;margin:0 auto;padding:0 16px 60px;}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 18px;border-bottom:1px solid var(--line);}
+.tab{padding:8px 10px 8px 15px;border-radius:8px 8px 0 0;cursor:pointer;font-weight:500;font-size:13px;color:var(--muted);border:1px solid transparent;display:flex;align-items:center;gap:6px;}
+.tab.active{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-bottom-color:var(--panel);margin-bottom:-1px;}
+.tab-add{padding:8px 13px;cursor:pointer;color:var(--muted);font-size:17px;}
+section.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 16px 18px;margin-bottom:16px;}
+.panel h2{font-size:15px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.panel h2 small{font-weight:400;color:var(--muted);font-size:11px;}
+.btn{background:var(--ink);color:var(--paper);border:none;border-radius:7px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px;}
+table{border-collapse:collapse;width:100%;font-size:12px;min-width:560px;}
+th,td{border:1px solid var(--line);padding:5px 7px;white-space:nowrap;vertical-align:top;}
+thead th{background:var(--head);font-weight:600;text-align:center;position:sticky;top:0;}
+th.sub{font-weight:500;font-size:10px;color:var(--muted);}
+td.rowhead{background:var(--head);font-weight:500;position:sticky;left:0;text-align:center;}
+td input{width:72px;border:none;background:transparent;color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:12px;text-align:right;padding:2px;}
+td input:focus{outline:1px solid var(--ink);border-radius:3px;}
+.x{cursor:pointer;color:var(--muted);font-size:11px;padding:0 3px;}
+.x:hover{color:var(--debit);}
+.actions{display:flex;gap:8px;margin-top:10px;}
+.due{color:var(--card);font-weight:600;}
+.neg{color:var(--debit);}
+.pos{color:var(--credit);}
+.pill{cursor:pointer;font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted);white-space:nowrap;}
+.pill.done{background:color-mix(in srgb, var(--credit) 18%, transparent);color:var(--credit);border-color:transparent;}
+.done-name{text-decoration:line-through;color:var(--muted);}
+.empty{color:var(--muted);font-size:12px;padding:6px 0;}
+.paycell{display:flex;flex-direction:column;gap:3px;min-width:92px;}
+.paycell .sum{font-size:12px;cursor:pointer;text-align:center;padding:2px 4px;border-radius:5px;}
+.paycell .sum:hover{background:var(--head);}
+td.credit .paycell .sum{color:var(--credit);}
+td.debit .paycell .sum{color:var(--debit);}
+.paydetail{display:flex;flex-direction:column;gap:3px;border-top:1px dashed var(--line);padding-top:3px;margin-top:2px;}
+.payrow{font-size:10px;color:var(--muted);display:flex;justify-content:space-between;gap:5px;align-items:center;}
+.tagcard{background:var(--head);padding:0 4px;border-radius:4px;font-size:9px;color:var(--card);}
+.addpay{cursor:pointer;color:var(--ink);font-size:10px;text-decoration:underline;text-align:center;}
+.remark-text{font-size:10px;color:var(--muted);font-style:italic;padding:1px 2px 3px 2px;}
+tr.topTotal td{background:var(--head);font-weight:600;text-align:center;}
+.note{color:var(--muted);font-size:11px;margin-top:8px;}
+.manage-panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:-8px 0 18px;}
+.manage-panel h3{font-size:13px;margin:0 0 10px;font-weight:600;}
+.manage-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;}
+.manage-row:last-of-type{border-bottom:none;}
+.userchip{font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;}
+.userchip img{width:18px;height:18px;border-radius:50%;}
+#userBar{margin-top:6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+#userBar .x{text-decoration:underline;}
+.sync-badge{font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid var(--line);color:var(--muted);}
+.manage-row .sub{color:var(--muted);font-size:11px;margin-left:8px;}
+.manage-row .code{font-weight:600;}
+.btn.danger{background:transparent;color:var(--debit);border:1px solid var(--debit);}
+</style>
+</head>
+<body>
+<header>
+  <h1>Finance Management</h1>
+  <p>Created by NAP</p>
+  <div id="userBar"></div>
+</header>
+<div class="wrap">
+  <div class="tabs" id="tabs"></div>
+  <div id="managePanel" class="manage-panel" style="display:none"></div>
+  <div id="content"></div>
+</div>
+
+<script>
+const CLIENT_ID = "129693844318-fs887q44brrvi89erdqc5gldblo9sn88.apps.googleusercontent.com"; // Replace with your Google OAuth Client ID
+const DRIVE_FILE_NAME = "finance-data.json";
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(e => console.log('SW registration note:', e));
+  });
+}
+
+const MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function monthNow(){ return new Date().toISOString().slice(0,7); }
+function monthName(label){ return MONTH_NAMES[parseInt(label.slice(5,7),10)-1]; }
+function nextMonthLabel(c){
+  if(!c.budgetMonths.length) return monthNow();
+  const latest = c.budgetMonths.map(m=>m.label).sort().slice(-1)[0];
+  let [y,mo] = latest.split('-').map(Number);
+  mo += 1; if(mo>12){ mo=1; y+=1; }
+  return `${y}-${String(mo).padStart(2,'0')}`;
+}
+const STORE_KEY = 'ledger_grid_v5';
+function makeBudgets(prefix,n){ const arr=[]; for(let i=1;i<=n;i++) arr.push({id:prefix+i,name:'Budget '+i,opening:0,target:null,remark:'',completed:false}); return arr; }
+function makeCards(prefix,n){ const arr=[]; for(let i=1;i<=n;i++) arr.push({id:prefix+i,name:'Credit Card '+i,paid:{}}); return arr; }
+const seed = {
+  active:'INR', userName:null, userEmail:null, userPic:null, driveAccessToken:null, driveFileId:null,
+  currencies:[
+    { code:'INR', symbol:'₹', budgets:makeBudgets('b',10), cards:makeCards('c',1), collapsedYears:[],
+      budgetMonths:[{id:'m1',label:monthNow(),creditedPayments:[],vals:{}}] },
+    { code:'AED', symbol:'AED', budgets:makeBudgets('a',10), cards:makeCards('d',1), collapsedYears:[],
+      budgetMonths:[{id:'m1',label:monthNow(),creditedPayments:[],vals:{}}] }
+  ]
+};
+
+function uid(){ return Math.random().toString(36).slice(2,9); }
+
+function migrateData(d){
+  if(!d || !Array.isArray(d.currencies)) return JSON.parse(JSON.stringify(seed));
+  d.currencies.forEach(c=>{
+    if(!c.cards) c.cards=[];
+    c.cards.forEach(cd=>{ if(!cd.paid) cd.paid={}; });
+    if(!c.budgetMonths) c.budgetMonths=[];
+    c.budgetMonths.forEach(m=>{
+      if(m.credited!==undefined && !m.creditedPayments){
+        m.creditedPayments = m.credited ? [{id:uid(),amount:m.credited,remark:'Migrated from an earlier version'}] : [];
+        delete m.credited;
+      }
+      if(!m.creditedPayments) m.creditedPayments=[];
+      if(!m.vals) m.vals={};
+    });
+    (c.budgets||[]).forEach(b=>{ if(b.completed===undefined) b.completed=false; });
+    if(!c.collapsedYears) c.collapsedYears=[];
+  });
+  if(d.userName===undefined) d.userName=null;
+  if(d.userEmail===undefined) d.userEmail=null;
+  if(d.userPic===undefined) d.userPic=null;
+  return d;
+}
+
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw) return migrateData(JSON.parse(raw));
+  }catch(e){}
+  return JSON.parse(JSON.stringify(seed));
+}
+
+let data = loadLocal();
+let openCells = new Set();
+let syncStatus = 'Offline / Saved Locally';
+let tokenClient = null;
+
+function persistLocal(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }catch(e){ console.error('save failed',e); }
+}
+
+function save(){
+  persistLocal();
+  if (navigator.onLine && data.driveAccessToken) {
+    syncToDrive();
+  } else {
+    syncStatus = navigator.onLine ? 'Saved Locally' : 'Offline (Saved Locally)';
+    renderUserBar();
+  }
+}
+
+// Google Drive API Methods
+async function syncToDrive() {
+  if (!data.driveAccessToken) return;
+  syncStatus = 'Syncing...';
+  renderUserBar();
+
+  try {
+    const fileContent = JSON.stringify(data);
+    
+    // If we don't have a file ID, look for existing file in AppData folder
+    if (!data.driveFileId) {
+      const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE_NAME}'&spaces=appDataFolder`, {
+        headers: { 'Authorization': `Bearer ${data.driveAccessToken}` }
+      });
+      const searchData = await searchRes.json();
+      if (searchData.files && searchData.files.length > 0) {
+        data.driveFileId = searchData.files[0].id;
+      }
+    }
+
+    if (data.driveFileId) {
+      // Update existing file
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${data.driveFileId}?uploadType=media`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${data.driveAccessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: fileContent
+      });
+    } else {
+      // Create new file in appDataFolder
+      const metadata = {
+        name: DRIVE_FILE_NAME,
+        parents: ['appDataFolder']
+      };
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', new Blob([fileContent], { type: 'application/json' }));
+
+      const createRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${data.driveAccessToken}` },
+        body: form
+      });
+      const createData = await createRes.json();
+      data.driveFileId = createData.id;
+    }
+    persistLocal();
+    syncStatus = 'Synced with Drive ✓';
+  } catch (err) {
+    console.error('Drive Sync Error:', err);
+    syncStatus = 'Sync Failed (Local Saved)';
+  }
+  renderUserBar();
+}
+
+async function loadFromDrive() {
+  if (!data.driveAccessToken) return;
+  syncStatus = 'Fetching Cloud Data...';
+  renderUserBar();
+
+  try {
+    const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE_NAME}'&spaces=appDataFolder`, {
+      headers: { 'Authorization': `Bearer ${data.driveAccessToken}` }
+    });
+    const searchData = await searchRes.json();
+    if (searchData.files && searchData.files.length > 0) {
+      data.driveFileId = searchData.files[0].id;
+      const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${data.driveFileId}?alt=media`, {
+        headers: { 'Authorization': `Bearer ${data.driveAccessToken}` }
+      });
+      const cloudData = await fileRes.json();
+      if (cloudData && cloudData.currencies) {
+        data = migrateData(cloudData);
+        persistLocal();
+        renderAll();
+      }
+    }
+    syncStatus = 'Synced with Drive ✓';
+  } catch (err) {
+    console.error('Drive Load Error:', err);
+    syncStatus = 'Local Mode';
+  }
+  renderUserBar();
+}
+
+function initGoogleDriveAuth() {
+  if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+      callback: async (response) => {
+        if (response.access_token) {
+          data.driveAccessToken = response.access_token;
+          
+          // Fetch user profile info
+          const userInfo = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { 'Authorization': `Bearer ${response.access_token}` }
+          }).then(res => res.json());
+
+          data.userName = userInfo.name;
+          data.userEmail = userInfo.email;
+          data.userPic = userInfo.picture;
+          
+          save();
+          loadFromDrive();
+        }
+      },
+    });
+  }
+}
+
+window.addEventListener('online', () => { if (data.driveAccessToken) syncToDrive(); });
+
+function cur(){ return data.currencies.find(c=>c.code===data.active); }
+function fmt(n){ n = n||0; return (n<0?'-':'') + Math.abs(n).toLocaleString(undefined,{maximumFractionDigits:2}); }
+
+function cellVal(m,budgetId){
+  if(!m.vals[budgetId]) m.vals[budgetId] = {credit:[],debit:[]};
+  return m.vals[budgetId];
+}
+function sumList(list){ return (list||[]).reduce((s,p)=>s+p.amount,0); }
+function activeBudgets(c){ return c.budgets.filter(b=>!b.completed); }
+function completedBudgets(c){ return c.budgets.filter(b=>!b.completed===false); }
+function budgetNet(c,b){
+  let cr=0,db=0;
+  c.budgetMonths.forEach(m=>{ const v=m.vals[b.id]; if(v){ cr+=sumList(v.credit); db+=sumList(v.debit); } });
+  return {cr,db,net:cr-db};
+}
+function budgetBalance(c,b){ return b.opening + budgetNet(c,b).net; }
+function completedBalanceSum(c){ let s=0; completedBudgets(c).forEach(b=>s+=budgetBalance(c,b)); return s; }
+function completedNetAllTime(c){ let s=0; completedBudgets(c).forEach(b=>s+=budgetNet(c,b).net); return s; }
+function sumCompletedForMonth(c,m){
+  let cr=0,db=0;
+  completedBudgets(c).forEach(b=>{ const v=m.vals[b.id]; if(v){ cr+=sumList(v.credit); db+=sumList(v.debit); } });
+  return {cr,db};
+}
+function monthAllocated(m){ let t=0; Object.values(m.vals).forEach(v=>t+=sumList(v.credit)); return t; }
+function monthCreditedSum(m){ return sumList(m.creditedPayments); }
+function monthExtras(m){ return monthCreditedSum(m) - monthAllocated(m); }
+function cardStatementForMonth(c,card,m){
+  let t=0;
+  Object.values(m.vals).forEach(v=>(v.debit||[]).forEach(p=>{ if(p.cardId===card.id) t+=p.amount; }));
+  return t;
+}
+function cardDue(c,card){
+  let due=0;
+  c.budgetMonths.forEach(m=>{
+    const stmt = cardStatementForMonth(c,card,m);
+    const paid = (card.paid&&card.paid[m.id])||0;
+    due += stmt-paid;
+  });
+  return due;
+}
+function yearAggregates(c,budgets,cb,items){
+  let credited=0,total=0;
+  const perBudget={}; budgets.forEach(b=>perBudget[b.id]={cr:0,db:0});
+  let compCr=0,compDb=0;
+  items.forEach(m=>{
+    credited+=monthCreditedSum(m); total+=monthAllocated(m);
+    budgets.forEach(b=>{ const v=m.vals[b.id]; if(v){ perBudget[b.id].cr+=sumList(v.credit); perBudget[b.id].db+=sumList(v.debit); } });
+    if(cb.length){ const s=sumCompletedForMonth(c,m); compCr+=s.cr; compDb+=s.db; }
+  });
+  return {credited,total,extras:credited-total,perBudget,compCr,compDb};
+}
+function groupByYear(months){
+  const sorted = [...months].sort((a,b)=> b.label.localeCompare(a.label));
+  const groups=[];
+  sorted.forEach(m=>{
+    const year=m.label.slice(0,4);
+    let g=groups[groups.length-1];
+    if(!g||g.year!==year){ g={year,items:[]}; groups.push(g); }
+    g.items.push(m);
+  });
+  return groups;
+}
+
+function renderTabs(){
+  const t = document.getElementById('tabs');
+  t.innerHTML = data.currencies.map(c=>`<div class="tab ${c.code===data.active?'active':''}" data-code="${c.code}">${c.code}</div>`).join('')
+    + `<div class="tab-add" id="manageBtn" title="Manage currency tabs">⚙</div>`;
+  t.querySelectorAll('.tab').forEach(el=>el.onclick=()=>{ data.active=el.dataset.code; renderAll(); });
+  document.getElementById('manageBtn').onclick=()=>{
+    const mp = document.getElementById('managePanel');
+    mp.style.display = mp.style.display==='none' ? 'block' : 'none';
+    if(mp.style.display==='block') renderManagePanel();
+  };
+}
+
+function renderManagePanel(){
+  const mp = document.getElementById('managePanel');
+  mp.innerHTML = `<h3>Manage currency tabs</h3>` + data.currencies.map(c=>
+    `<div class="manage-row"><span><span class="code">${c.code}</span><span class="sub">${c.budgets.length} budgets · ${c.cards.length} cards</span></span>
+     <button class="btn danger" data-delcur="${c.code}">Delete</button></div>`
+  ).join('') + `<div class="actions"><button class="btn ghost" id="addCurBtn">+ Add currency</button></div>
+  <h3 style="margin-top:16px">Backup & Cloud Sync</h3>
+  <p class="note" style="margin-top:0">Save a local file backup, or force sync directly to your Google Drive App Folder.</p>
+  <div class="actions"><button class="btn ghost" id="exportBtn">⬇ Export data</button><label class="btn ghost" for="importFile" style="cursor:pointer">⬆ Import data</label><input type="file" id="importFile" accept="application/json" style="display:none"><button class="btn ghost" id="manualSyncBtn">☁ Sync to Drive</button></div>`;
+
+  mp.querySelectorAll('[data-delcur]').forEach(el=>el.onclick=()=>{
+    const code = el.dataset.delcur;
+    if(data.currencies.length<=1){ alert('Keep at least one currency tab.'); return; }
+    if(!confirm('Delete currency '+code+' and all its data? This cannot be undone.')) return;
+    data.currencies = data.currencies.filter(x=>x.code!==code);
+    if(data.active===code) data.active = data.currencies[0].code;
+    save(); renderAll();
+    document.getElementById('managePanel').style.display='block'; renderManagePanel();
+  });
+  document.getElementById('addCurBtn').onclick=()=>{
+    const code=prompt('Currency code (e.g. USD)'); if(!code) return;
+    const symbol=prompt('Symbol to display', code)||code;
+    data.currencies.push({code:code.toUpperCase(),symbol,budgets:[],cards:[],collapsedYears:[],budgetMonths:[{id:uid(),label:monthNow(),creditedPayments:[],vals:{}}]});
+    data.active=code.toUpperCase(); save(); renderAll();
+    document.getElementById('managePanel').style.display='block'; renderManagePanel();
+  };
+  document.getElementById('exportBtn').onclick=async()=>{
+    const json = JSON.stringify(data,null,2);
+    const filename = 'finance-data-backup.json';
+    const blob = new Blob([json],{type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+  document.getElementById('importFile').onchange=(e)=>{
+    const file = e.target.files[0]; if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const imported = migrateData(JSON.parse(reader.result));
+        if(!confirm('Replace all current data with this backup?')) return;
+        data = imported; save(); renderAll();
+        document.getElementById('managePanel').style.display='block'; renderManagePanel();
+      }catch(err){ alert('That file could not be read as a backup.'); }
+    };
+    reader.readAsText(file);
+  };
+  document.getElementById('manualSyncBtn').onclick=()=>{ syncToDrive(); };
+}
+
+function renderUserBar(){
+  const bar = document.getElementById('userBar');
+  const badge = `<span class="sync-badge">${syncStatus}</span>`;
+  
+  if (data.userEmail) {
+    const pic = data.userPic ? `<img src="${data.userPic}" alt="avatar">` : '👤';
+    bar.innerHTML = `<span class="userchip">${pic} <strong>${escapeHtml(data.userName||'User')}</strong> (${escapeHtml(data.userEmail)})</span> ${badge} <span class="x" id="logoutBtn">Sign Out</span>`;
+    document.getElementById('logoutBtn').onclick = () => {
+      data.userName = null;
+      data.userEmail = null;
+      data.userPic = null;
+      data.driveAccessToken = null;
+      data.driveFileId = null;
+      syncStatus = 'Offline / Saved Locally';
+      save();
+      renderUserBar();
+    };
+  } else {
+    bar.innerHTML = `<button class="btn ghost" id="loginDriveBtn">🔑 Sign in with Google Drive Sync</button> ${badge}`;
+    document.getElementById('loginDriveBtn').onclick = () => {
+      if (!tokenClient) initGoogleDriveAuth();
+      if (tokenClient) tokenClient.requestAccessToken({ prompt: 'consent' });
+    };
+  }
+}
+
+function renderContent(){
+  const c = cur();
+  const el = document.getElementById('content');
+  el.innerHTML = `
+    <section class="panel">
+      <h2>Budget Allocation</h2>
+      <div class="tw"><table><thead><tr><th>Sr.</th><th>Budget</th><th>Current Balance</th><th>Target</th><th>Remark</th><th>Status</th><th></th></tr></thead>
+      <tbody id="budgetTable"></tbody></table></div>
+      <div class="actions"><button class="btn ghost" id="addBudget">+ Add budget</button></div>
+    </section>
+
+    <section class="panel">
+      <h2>Transfer History <small>Credited = salary/inflow · Extras = left after allocating · Total = allocated to budgets</small></h2>
+      <div class="tw"><table id="transferTable"></table></div>
+      <div class="actions"><button class="btn ghost" id="addMonth">+ Add month</button><button class="btn ghost" id="addNextMonth">+ Add next month</button></div>
+      <p class="note">Click a Credit/Debit total to see or add individual payments; debit payments can be tagged to a credit card.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Credit Card Payments <small>Statement fills in automatically from card-tagged debits</small></h2>
+      <div class="tw"><table id="cardTable"></table></div>
+      <div class="actions"><button class="btn ghost" id="addCard">+ Add card</button></div>
+    </section>
+
+    <section class="panel">
+      <h2>Completed Budgets</h2>
+      <div class="tw"><table><thead><tr><th>Sr.</th><th>Budget</th><th>Final Balance</th><th>Target</th><th>Remark</th><th></th></tr></thead>
+      <tbody id="completedTable"></tbody></table></div>
+    </section>
+  `;
+
+  renderBudgetTable(c);
+  renderCompletedTable(c);
+  renderTransferTable(c);
+  renderCardTable(c);
+
+  document.getElementById('addBudget').onclick=()=>{
+    const suggested = 'Budget '+(c.budgets.length+1);
+    const name=prompt('Budget name', suggested); if(!name) return;
+    const opening=parseFloat(prompt('Opening balance','0'))||0;
+    const targetRaw=prompt('Target amount (optional)'); const target=targetRaw?parseFloat(targetRaw):null;
+    c.budgets.push({id:uid(),name,opening,target,remark:'',completed:false}); save(); renderAll();
+  };
+  document.getElementById('addMonth').onclick=()=>{
+    const year = prompt('Year (e.g. 2026)', new Date().getFullYear()); if(!year) return;
+    const monthChoice = prompt('Month number (1-12)\n'+MONTH_NAMES.map((n,i)=>(i+1)+'. '+n).join('\n'), (new Date().getMonth()+1));
+    if(!monthChoice) return;
+    const mm = String(parseInt(monthChoice,10)).padStart(2,'0');
+    c.budgetMonths.unshift({id:uid(),label:`${year}-${mm}`,creditedPayments:[],vals:{}}); save(); renderAll();
+  };
+  document.getElementById('addNextMonth').onclick=()=>{
+    const label = nextMonthLabel(c);
+    if(c.budgetMonths.some(m=>m.label===label)){ alert(monthName(label)+' '+label.slice(0,4)+' already exists.'); return; }
+    c.budgetMonths.unshift({id:uid(),label,creditedPayments:[],vals:{}}); save(); renderAll();
+  };
+  document.getElementById('addCard').onclick=()=>{
+    const suggested = 'Credit Card '+(c.cards.length+1);
+    const name=prompt('Card name', suggested); if(!name) return;
+    c.cards.push({id:uid(),name,paid:{}}); save(); renderAll();
+  };
+}
+
+function renderBudgetTable(c){
+  const tb = document.getElementById('budgetTable');
+  const list = activeBudgets(c);
+  let html = '';
+  if(!list.length){ html = '<tr><td colspan="7" class="empty">No active budgets.</td></tr>'; }
+  else {
+    html = list.map((b,i)=>{
+      const bal = budgetBalance(c,b);
+      return `<tr>
+        <td>${i+1}</td>
+        <td>${b.name}</td>
+        <td class="num ${bal<0?'neg':'pos'}">${c.symbol} ${fmt(bal)}</td>
+        <td class="num">${b.target?c.symbol+' '+fmt(b.target):'—'}</td>
+        <td>${b.remark||''}</td>
+        <td><span class="pill" data-toggle="${b.id}">Active</span></td>
+        <td><span class="x" data-edit="${b.id}">✎</span> <span class="x" data-del="${b.id}">×</span></td>
+      </tr>`;
+    }).join('');
+  }
+  const cb = completedBudgets(c);
+  if(cb.length){
+    html += `<tr><td>—</td><td><strong>Completed Allocation</strong></td><td class="num pos">${c.symbol} ${fmt(completedBalanceSum(c))}</td><td>—</td><td>${cb.length} budget${cb.length>1?'s':''}</td><td>—</td><td>—</td></tr>`;
+  }
+  tb.innerHTML = html;
+  tb.querySelectorAll('[data-toggle]').forEach(el=>el.onclick=()=>{
+    const b=c.budgets.find(x=>x.id===el.dataset.toggle); b.completed=true; save(); renderAll();
+  });
+  tb.querySelectorAll('[data-edit]').forEach(el=>el.onclick=()=>{
+    const b=c.budgets.find(x=>x.id===el.dataset.edit);
+    const name=prompt('Budget name', b.name); if(name===null) return;
+    const targetRaw=prompt('Target (blank for none)', b.target||''); const target=targetRaw?parseFloat(targetRaw):null;
+    const remark=prompt('Remark', b.remark||'');
+    b.name=name; b.target=target; b.remark=remark||''; save(); renderAll();
+  });
+  tb.querySelectorAll('[data-del]').forEach(el=>el.onclick=()=>{
+    if(!confirm('Delete this budget and its history?')) return;
+    c.budgets = c.budgets.filter(x=>x.id!==el.dataset.del);
+    c.budgetMonths.forEach(m=>delete m.vals[el.dataset.del]);
+    save(); renderAll();
+  });
+}
+
+function renderCompletedTable(c){
+  const tb = document.getElementById('completedTable');
+  const list = completedBudgets(c);
+  if(!list.length){ tb.innerHTML='<tr><td colspan="6" class="empty">No completed budgets yet. Mark a budget as completed from Budget Allocation.</td></tr>'; return; }
+  tb.innerHTML = list.map((b,i)=>{
+    const bal = budgetBalance(c,b);
+    return `<tr>
+      <td>${i+1}</td>
+      <td class="done-name">${b.name}</td>
+      <td class="num ${bal<0?'neg':'pos'}">${c.symbol} ${fmt(bal)}</td>
+      <td class="num">${b.target?c.symbol+' '+fmt(b.target):'—'}</td>
+      <td>${b.remark||''}</td>
+      <td><span class="pill done" data-reopen="${b.id}">↺ Reopen</span> <span class="x" data-del2="${b.id}">×</span></td>
+    </tr>`;
+  }).join('');
+  tb.querySelectorAll('[data-reopen]').forEach(el=>el.onclick=()=>{
+    const b=c.budgets.find(x=>x.id===el.dataset.reopen); b.completed=false; save(); renderAll();
+  });
+  tb.querySelectorAll('[data-del2]').forEach(el=>el.onclick=()=>{
+    if(!confirm('Delete this budget and its history?')) return;
+    c.budgets = c.budgets.filter(x=>x.id!==el.dataset.del2);
+    c.budgetMonths.forEach(m=>delete m.vals[el.dataset.del2]);
+    save(); renderAll();
+  });
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function payRowHTML(p, tagsHTML, delHTML){
+  const hasRemark = p.remark && String(p.remark).trim();
+  const rkey = 'remark:'+p.id;
+  const remarkOpen = openCells.has(rkey);
+  return `<div class="payrow-wrap">
+    <div class="payrow"><span>${fmt(p.amount)}${tagsHTML}</span><span>${hasRemark?`<span class="x" data-toggleremark="${rkey}" title="Show remark">📝</span>`:''}${delHTML}</span></div>
+    ${hasRemark && remarkOpen ? `<div class="remark-text">${escapeHtml(p.remark)}</div>` : ''}
+  </div>`;
+}
+
+function creditedCellHTML(m,c){
+  const key = 'credited:'+m.id;
+  const isOpen = openCells.has(key);
+  const list = m.creditedPayments||[];
+  const sum = sumList(list);
+  const rows = list.map(p=>payRowHTML(p,'',`<span class="x" data-delcredpay="${p.id}" data-m="${m.id}">×</span>`)).join('') || '<div class="payrow empty">No payments</div>';
+  return `<td class="credit"><div class="paycell">
+    <div class="sum num" data-togglecredited="${m.id}">${fmt(sum)}</div>
+    <div class="paydetail" style="display:${isOpen?'flex':'none'}">${rows}<span class="addpay" data-addcredpay="${m.id}">+ add</span></div>
+  </div></td>`;
+}
+
+function completedCellHTML(type,m,c){
+  const key = 'completed:'+type+':'+m.id;
+  const isOpen = openCells.has(key);
+  const items = [];
+  completedBudgets(c).forEach(b=>{
+    const v = m.vals[b.id];
+    if(v) (v[type]||[]).forEach(p=>items.push({...p, budgetName:b.name}));
+  });
+  const sum = items.reduce((s,p)=>s+p.amount,0);
+  const rows = items.map(p=>{
+    const cardName = p.cardId ? (c.cards.find(cd=>cd.id===p.cardId)||{}).name : '';
+    const tags = ` <span class="tagcard">${p.budgetName}</span>${cardName?' <span class=\"tagcard\">'+cardName+'</span>':''}`;
+    return payRowHTML(p,tags,'');
+  }).join('') || '<div class="payrow empty">No payments</div>';
+  return `<td class="${type}"><div class="paycell">
+    <div class="sum num" data-togglecomp="${key}">${fmt(sum)}</div>
+    <div class="paydetail" style="display:${isOpen?'flex':'none'}">${rows}</div>
+  </div></td>`;
+}
+
+function paymentCellHTML(list,type,monthId,budgetId,c){
+  const key = type+':'+monthId+':'+budgetId;
+  const isOpen = openCells.has(key);
+  const sum = sumList(list);
+  const rows = (list||[]).map(p=>{
+    const cardName = p.cardId ? (c.cards.find(cd=>cd.id===p.cardId)||{}).name : '';
+    const tags = cardName?' <span class="tagcard">'+cardName+'</span>':'';
+    const del = `<span class="x" data-delpay="${p.id}" data-m="${monthId}" data-b="${budgetId}" data-t="${type}">×</span>`;
+    return payRowHTML(p,tags,del);
+  }).join('') || '<div class="payrow empty">No payments</div>';
+  return `<td class="${type}"><div class="paycell">
+    <div class="sum num" data-togglecell="${key}">${fmt(sum)}</div>
+    <div class="paydetail" style="display:${isOpen?'flex':'none'}">${rows}<span class="addpay" data-addpay="1" data-m="${monthId}" data-b="${budgetId}" data-t="${type}">+ add</span></div>
+  </div></td>`;
+}
+
+function renderTransferTable(c){
+  const t = document.getElementById('transferTable');
+  const budgets = activeBudgets(c);
+  const cb = completedBudgets(c);
+  if(!budgets.length && !cb.length){ t.innerHTML='<tr><td class="empty">Add a budget first.</td></tr>'; return; }
+
+  let head1 = '<tr><th>Year</th><th>Month</th><th>Credited</th><th>Extras</th><th>Total</th>'
+    + budgets.map(b=>`<th colspan="2">${b.name}</th>`).join('')
+    + (cb.length?'<th colspan="2">Completed Allocation</th>':'') + '</tr>';
+
+  let allCredited=0, allTotal=0;
+  c.budgetMonths.forEach(m=>{ allCredited+=monthCreditedSum(m); allTotal+=monthAllocated(m); });
+  let topRow = `<tr class="topTotal"><td colspan="2">Net (all-time)</td><td class="num">—</td><td class="num">${fmt(allCredited-allTotal)}</td><td class="num">${fmt(allTotal)}</td>`
+    + budgets.map(b=>{ const n=budgetNet(c,b); return `<td colspan="2" class="num">${fmt(n.net)}</td>`; }).join('')
+    + (cb.length?`<td colspan="2" class="num">${fmt(completedNetAllTime(c))}</td>`:'') + '</tr>';
+
+  let head2 = '<tr><th></th><th></th><th></th><th></th><th></th>' + budgets.map(()=>`<th class="sub">Credit</th><th class="sub">Debit</th>`).join('')
+    + (cb.length?'<th class="sub">Credit</th><th class="sub">Debit</th>':'') + '</tr>';
+
+  const groups = groupByYear(c.budgetMonths);
+  if(!c.collapsedYears) c.collapsedYears=[];
+  let rows = '';
+  groups.forEach(g=>{
+    const collapsed = c.collapsedYears.includes(g.year);
+    if(collapsed){
+      const agg = yearAggregates(c,budgets,cb,g.items);
+      const budgetCells = budgets.map(b=>`<td class="num" style="text-align:center">${fmt(agg.perBudget[b.id].cr)}</td><td class="num" style="text-align:center">${fmt(agg.perBudget[b.id].db)}</td>`).join('');
+      const compCells = cb.length?`<td class="num" style="text-align:center">${fmt(agg.compCr)}</td><td class="num" style="text-align:center">${fmt(agg.compDb)}</td>`:'';
+      rows += `<tr><td class="rowhead"><span class="x" data-toggleyear="${g.year}">▸</span> ${g.year}</td>
+        <td class="rowhead">All ${g.items.length} month${g.items.length>1?'s':''}</td>
+        <td class="num">${fmt(agg.credited)}</td><td class="num">${fmt(agg.extras)}</td><td class="num">${fmt(agg.total)}</td>
+        ${budgetCells}${compCells}</tr>`;
+      return;
+    }
+    g.items.forEach((m,idx)=>{
+      const budgetCells = budgets.map(b=>{
+        const v = cellVal(m,b.id);
+        return paymentCellHTML(v.credit,'credit',m.id,b.id,c) + paymentCellHTML(v.debit,'debit',m.id,b.id,c);
+      }).join('');
+      const compCells = cb.length ? (completedCellHTML('credit',m,c) + completedCellHTML('debit',m,c)) : '';
+      rows += `<tr>${idx===0?`<td class="rowhead" rowspan="${g.items.length}"><span class="x" data-toggleyear="${g.year}">▾</span> ${g.year}</td>`:''}
+        <td class="rowhead">${monthName(m.label)} <span class="x" data-delmonth="${m.id}">×</span></td>
+        ${creditedCellHTML(m,c)}
+        <td class="num">${fmt(monthExtras(m))}</td>
+        <td class="num">${fmt(monthAllocated(m))}</td>
+        ${budgetCells}${compCells}</tr>`;
+    });
+  });
+
+  t.innerHTML = `<thead>${head1}${topRow}${head2}</thead><tbody>${rows}</tbody>`;
+
+  t.querySelectorAll('[data-togglecredited]').forEach(el=>el.onclick=()=>{
+    const key = 'credited:'+el.dataset.togglecredited;
+    if(openCells.has(key)) openCells.delete(key); else openCells.add(key);
+    renderTransferTable(c);
+  });
+  t.querySelectorAll('[data-addcredpay]').forEach(el=>el.onclick=()=>{
+    const amount = parseFloat(prompt('Amount credited (salary or other inflow)')); if(!amount) return;
+    const remark = prompt('Remark (optional)') || '';
+    const m=c.budgetMonths.find(x=>x.id===el.dataset.addcredpay);
+    if(!m.creditedPayments) m.creditedPayments=[];
+    m.creditedPayments.push({id:uid(),amount,remark});
+    openCells.add('credited:'+m.id);
+    save(); renderAll();
+  });
+  t.querySelectorAll('[data-delcredpay]').forEach(el=>el.onclick=()=>{
+    const m=c.budgetMonths.find(x=>x.id===el.dataset.m);
+    m.creditedPayments = (m.creditedPayments||[]).filter(p=>p.id!==el.dataset.delcredpay);
+    save(); renderAll();
+  });
+  t.querySelectorAll('[data-delmonth]').forEach(el=>el.onclick=()=>{
+    if(!confirm('Delete this month row?')) return;
+    c.budgetMonths = c.budgetMonths.filter(x=>x.id!==el.dataset.delmonth);
+    save(); renderAll();
+  });
+  t.querySelectorAll('[data-toggleyear]').forEach(el=>el.onclick=()=>{
+    const y = el.dataset.toggleyear;
+    if(!c.collapsedYears) c.collapsedYears=[];
+    if(c.collapsedYears.includes(y)) c.collapsedYears = c.collapsedYears.filter(x=>x!==y); else c.collapsedYears.push(y);
+    save(); renderTransferTable(c); renderCardTable(c);
+  });
+  t.querySelectorAll('[data-togglecell]').forEach(el=>el.onclick=()=>{
+    const key = el.dataset.togglecell;
+    if(openCells.has(key)) openCells.delete(key); else openCells.add(key);
+    renderTransferTable(c);
+  });
+  t.querySelectorAll('[data-togglecomp]').forEach(el=>el.onclick=()=>{
+    const key = el.dataset.togglecomp;
+    if(openCells.has(key)) openCells.delete(key); else openCells.add(key);
+    renderTransferTable(c);
+  });
+  t.querySelectorAll('[data-toggleremark]').forEach(el=>el.onclick=(e)=>{
+    e.stopPropagation();
+    const key = el.dataset.toggleremark;
+    if(openCells.has(key)) openCells.delete(key); else openCells.add(key);
+    renderTransferTable(c);
+  });
+  t.querySelectorAll('[data-addpay]').forEach(el=>el.onclick=()=>{
+    const amount = parseFloat(prompt('Payment amount')); if(!amount) return;
+    const m=c.budgetMonths.find(x=>x.id===el.dataset.m);
+    const v = cellVal(m,el.dataset.b);
+    const type = el.dataset.t;
+    let cardId=null;
+    if(type==='debit' && c.cards.length){
+      const list = c.cards.map((cd,i)=>(i+1)+'. '+cd.name).join('\n');
+      const choice = prompt('Paid by credit card? Enter number, or leave blank for cash/bank:\n'+list);
+      if(choice){ const idx=parseInt(choice)-1; if(c.cards[idx]) cardId=c.cards[idx].id; }
+    }
+    const remark = prompt('Remark (optional)') || '';
+    v[type].push({id:uid(),amount,cardId,remark});
+    openCells.add(type+':'+m.id+':'+el.dataset.b);
+    save(); renderAll();
+  });
+  t.querySelectorAll('[data-delpay]').forEach(el=>el.onclick=()=>{
+    const m=c.budgetMonths.find(x=>x.id===el.dataset.m);
+    const v = cellVal(m,el.dataset.b);
+    v[el.dataset.t] = v[el.dataset.t].filter(p=>p.id!==el.dataset.delpay);
+    save(); renderAll();
+  });
+}
+
+function renderCardTable(c){
+  const t = document.getElementById('cardTable');
+  if(!c.cards.length){ t.innerHTML='<tr><td class="empty">No credit cards yet.</td></tr>'; return; }
+  let head1 = '<tr><th rowspan="2">Year</th><th rowspan="2">Month</th>' + c.cards.map(cd=>`<th colspan="2">${cd.name} <span class="x" data-editcard="${cd.id}">✎</span><span class="x" data-delcard="${cd.id}">×</span></th>`).join('') + '</tr>';
+  let head2 = '<tr>' + c.cards.map(()=>`<th class="sub">Statement</th><th class="sub">Paid</th>`).join('') + '</tr>';
+
+  const groups = groupByYear(c.budgetMonths);
+  if(!c.collapsedYears) c.collapsedYears=[];
+  let rows = '';
+  groups.forEach(g=>{
+    const collapsed = c.collapsedYears.includes(g.year);
+    if(collapsed){
+      const per = {}; c.cards.forEach(cd=>per[cd.id]={stmt:0,paid:0});
+      g.items.forEach(m=>{ c.cards.forEach(cd=>{ per[cd.id].stmt += cardStatementForMonth(c,cd,m); per[cd.id].paid += (cd.paid&&cd.paid[m.id])||0; }); });
+      const cells = c.cards.map(cd=>`<td class="num" style="text-align:center">${fmt(per[cd.id].stmt)}</td><td class="num" style="text-align:center">${fmt(per[cd.id].paid)}</td>`).join('');
+      rows += `<tr><td class="rowhead"><span class="x" data-toggleyear="${g.year}">▸</span> ${g.year}</td><td class="rowhead">All ${g.items.length} month${g.items.length>1?'s':''}</td>${cells}</tr>`;
+      return;
+    }
+    g.items.forEach((m,idx)=>{
+      const cells = c.cards.map(cd=>{
+        const stmt = cardStatementForMonth(c,cd,m);
+        const paid = (cd.paid&&cd.paid[m.id])||0;
+        return `<td class="num" style="text-align:center">${fmt(stmt)}</td><td><input type="text" inputmode="decimal" data-cardpaid="${cd.id}" data-m="${m.id}" value="${paid||''}"></td>`;
+      }).join('');
+      rows += `<tr>${idx===0?`<td class="rowhead" rowspan="${g.items.length}"><span class="x" data-toggleyear="${g.year}">▾</span> ${g.year}</td>`:''}<td class="rowhead">${monthName(m.label)}</td>${cells}</tr>`;
+    });
+  });
+  const dueRow = c.cards.map(cd=>`<td colspan="2" class="num due">Due ${c.symbol} ${fmt(cardDue(c,cd))}</td>`).join('');
+  t.innerHTML = `<thead>${head1}${head2}</thead><tbody>${rows}</tbody><tfoot><tr><td colspan="2">Outstanding</td>${dueRow}</tr></tfoot>`;
+
+  t.querySelectorAll('[data-toggleyear]').forEach(el=>el.onclick=()=>{
+    const y = el.dataset.toggleyear;
+    if(!c.collapsedYears) c.collapsedYears=[];
+    if(c.collapsedYears.includes(y)) c.collapsedYears = c.collapsedYears.filter(x=>x!==y); else c.collapsedYears.push(y);
+    save(); renderTransferTable(c); renderCardTable(c);
+  });
+
+  t.querySelectorAll('[data-cardpaid]').forEach(inp=>inp.oninput=()=>{
+    let v = inp.value.replace(/[^0-9.]/g,''); const parts=v.split('.'); if(parts.length>2) v=parts[0]+'.'+parts.slice(1).join(''); inp.value=v;
+    const cd = c.cards.find(x=>x.id===inp.dataset.cardpaid);
+    if(!cd.paid) cd.paid={};
+    cd.paid[inp.dataset.m] = parseFloat(v)||0;
+    save();
+    const dueCells = t.querySelectorAll('tfoot td.due');
+    c.cards.forEach((card,i)=>{ dueCells[i].textContent = `Due ${c.symbol} ${fmt(cardDue(c,card))}`; });
+  });
+  t.querySelectorAll('[data-editcard]').forEach(el=>el.onclick=()=>{
+    const cd = c.cards.find(x=>x.id===el.dataset.editcard);
+    const name = prompt('Card name', cd.name); if(!name) return;
+    cd.name = name; save(); renderAll();
+  });
+  t.querySelectorAll('[data-delcard]').forEach(el=>el.onclick=(ev)=>{
+    ev.stopPropagation();
+    if(!confirm('Delete this card? Payments tagged to it keep their amounts but lose the card tag.')) return;
+    const id = el.dataset.delcard;
+    c.cards = c.cards.filter(x=>x.id!==id);
+    c.budgetMonths.forEach(m=>Object.values(m.vals).forEach(v=>(v.debit||[]).forEach(p=>{ if(p.cardId===id) p.cardId=null; })));
+    save(); renderAll();
+  });
+}
+
+function renderAll(){ renderTabs(); renderContent(); renderUserBar(); }
+window.onload = () => { initGoogleDriveAuth(); renderAll(); };
+</script>
+</body>
+</html>
