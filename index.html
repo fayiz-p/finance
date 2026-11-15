@@ -95,7 +95,7 @@ tr.topTotal td{background:var(--head);font-weight:600;text-align:center;}
 <body>
 <header>
   <h1>Finance Management</h1>
-  <p>Created by NAP</p>
+  <p>Powered by Azsara</p>
   <div id="userBar"></div>
 </header>
 <div class="wrap">
@@ -105,7 +105,7 @@ tr.topTotal td{background:var(--head);font-weight:600;text-align:center;}
 </div>
 
 <script>
-const CLIENT_ID = "332350360983-h3ktnpfit3gu5ijve3juj5pjfn4si4d8.apps.googleusercontent.com"; // Replace with your Google OAuth Client ID
+const CLIENT_ID = "32350360983-h3ktnpfit3gu5ijve3juj5pjfn4si4d8.apps.googleusercontent.com"; // Replace with your Google OAuth Client ID
 const DRIVE_FILE_NAME = "finance-data.json";
 
 if ('serviceWorker' in navigator) {
@@ -173,136 +173,130 @@ function loadLocal(){
 let data = loadLocal();
 let openCells = new Set();
 let syncStatus = 'Offline / Saved Locally';
-let tokenClient = null;
+let tokenClient = null, tokenExpiry = 0, saveTimer = null, syncing = false, pending = false;
 
+let meta = (()=>{ try{ return JSON.parse(localStorage.getItem('ledger_sync_meta')); }catch(e){ return null; } })() || { dirty: true, remoteModified: null };
+function saveMeta(){ try{ localStorage.setItem('ledger_sync_meta', JSON.stringify(meta)); }catch(e){} }
+let connecting = false, autoTried = false;
+function exportData(){ const d=Object.assign({},data); delete d.driveAccessToken; delete d.driveFileId; return d; }
 function persistLocal(){
-  try{ localStorage.setItem(STORE_KEY, JSON.stringify(data)); }catch(e){ console.error('save failed',e); }
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(exportData())); }catch(e){ console.error('save failed',e); }
 }
+function hasToken(){ return !!data.driveAccessToken && Date.now() < tokenExpiry; }
 
 function save(){
+  data.updatedAt = Date.now(); meta.dirty = true; saveMeta();
   persistLocal();
-  if (navigator.onLine && data.driveAccessToken) {
-    syncToDrive();
+  if (!data.userEmail) { syncStatus = navigator.onLine ? 'Saved Locally' : 'Offline (Saved Locally)'; renderUserBar(); return; }
+  if (!hasToken()) { syncStatus = 'Saved locally – tap Reconnect to sync'; renderUserBar(); return; }
+  syncStatus = 'Saving…'; renderUserBar();
+  clearTimeout(saveTimer); saveTimer = setTimeout(syncToDrive, 1200);
+}
+
+// ---- Google Drive helpers ----
+async function gfetch(url, opts = {}){
+  const r = await fetch(url, Object.assign({}, opts, { headers: Object.assign({ Authorization: 'Bearer ' + data.driveAccessToken }, opts.headers || {}) }));
+  if (r.status === 401) { data.driveAccessToken = null; tokenExpiry = 0; throw new Error('SESSION'); }
+  if (!r.ok) { let m = ''; try { const j = await r.json(); m = (j.error && j.error.message) || ''; } catch(e){} throw new Error(r.status + ' ' + m); }
+  return r;
+}
+async function findFile(){
+  const q = encodeURIComponent(`name='${DRIVE_FILE_NAME}'`);
+  const j = await (await gfetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=appDataFolder&fields=files(id,modifiedTime)&orderBy=modifiedTime%20desc`)).json();
+  return j.files && j.files[0] ? j.files[0] : null;
+}
+function failStatus(err){
+  console.error('Drive error:', err);
+  if (err.message === 'SESSION' || !hasToken()) syncStatus = 'Session expired – tap Reconnect';
+  else syncStatus = 'Sync failed: ' + String(err.message).slice(0, 90);
+  if (/^404/.test(err.message)) data.driveFileId = null;
+}
+
+// Compare Drive with this device. Returns 'none' | 'same' | 'pulled' | 'push'
+async function pull(){
+  const f = await findFile();
+  if (!f) return 'none';
+  data.driveFileId = f.id;
+  if (f.modifiedTime === meta.remoteModified) return 'same';      // Drive unchanged since our last sync
+  const cloud = await (await gfetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`)).json();
+  if (!(cloud && cloud.currencies)) return 'same';
+  if (!meta.dirty) { adopt(cloud, f.modifiedTime); return 'pulled'; }
+  // Both sides changed: keep a safety copy of this device's data, then ask
+  try{ localStorage.setItem('ledger_conflict_backup', JSON.stringify(exportData())); }catch(e){}
+  const useCloud = confirm('This device and Google Drive both have different changes.\n\nOK = use the Google Drive version (this device\'s changes are discarded)\nCancel = keep THIS device\'s version and overwrite Drive');
+  if (useCloud) { adopt(cloud, f.modifiedTime); return 'pulled'; }
+  meta.remoteModified = f.modifiedTime; saveMeta(); return 'push';
+}
+function adopt(cloud, modified){
+  const keep = { userName: data.userName, userEmail: data.userEmail, userPic: data.userPic, driveAccessToken: data.driveAccessToken, driveFileId: data.driveFileId };
+  data = Object.assign(migrateData(cloud), keep);
+  meta.dirty = false; meta.remoteModified = modified; saveMeta(); persistLocal(); renderAll();
+}
+async function upload(){
+  const stamp = data.updatedAt, body = JSON.stringify(exportData());
+  let j;
+  if (data.driveFileId) {
+    j = await (await gfetch(`https://www.googleapis.com/upload/drive/v3/files/${data.driveFileId}?uploadType=media&fields=id,modifiedTime`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body })).json();
   } else {
-    syncStatus = navigator.onLine ? 'Saved Locally' : 'Offline (Saved Locally)';
-    renderUserBar();
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify({ name: DRIVE_FILE_NAME, parents: ['appDataFolder'] })], { type: 'application/json' }));
+    form.append('file', new Blob([body], { type: 'application/json' }));
+    j = await (await gfetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime`, { method: 'POST', body: form })).json();
   }
+  if (!j.id) throw new Error('Drive did not return a file id');
+  data.driveFileId = j.id; meta.remoteModified = j.modifiedTime;
+  if (data.updatedAt === stamp) meta.dirty = false;               // no edits happened during upload
+  saveMeta();
 }
 
-// Google Drive API Methods
-async function syncToDrive() {
-  if (!data.driveAccessToken) return;
-  syncStatus = 'Syncing...';
-  renderUserBar();
-
+async function syncToDrive(){
+  clearTimeout(saveTimer);
+  if (!hasToken()) { syncStatus = 'Session expired – tap Reconnect'; renderUserBar(); return; }
+  if (syncing) { pending = true; return; }
+  syncing = true; syncStatus = 'Syncing…'; renderUserBar();
   try {
-    const fileContent = JSON.stringify(data);
-    
-    // If we don't have a file ID, look for existing file in AppData folder
-    if (!data.driveFileId) {
-      const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE_NAME}'&spaces=appDataFolder`, {
-        headers: { 'Authorization': `Bearer ${data.driveAccessToken}` }
-      });
-      const searchData = await searchRes.json();
-      if (searchData.files && searchData.files.length > 0) {
-        data.driveFileId = searchData.files[0].id;
-      }
-    }
-
-    if (data.driveFileId) {
-      // Update existing file
-      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${data.driveFileId}?uploadType=media`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${data.driveAccessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: fileContent
-      });
-    } else {
-      // Create new file in appDataFolder
-      const metadata = {
-        name: DRIVE_FILE_NAME,
-        parents: ['appDataFolder']
-      };
-      const form = new FormData();
-      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-      form.append('file', new Blob([fileContent], { type: 'application/json' }));
-
-      const createRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${data.driveAccessToken}` },
-        body: form
-      });
-      const createData = await createRes.json();
-      data.driveFileId = createData.id;
-    }
-    persistLocal();
-    syncStatus = 'Synced with Drive ✓';
-  } catch (err) {
-    console.error('Drive Sync Error:', err);
-    syncStatus = 'Sync Failed (Local Saved)';
-  }
+    const r = await pull();
+    if (r === 'pulled') syncStatus = 'Updated from Drive ✓';
+    else if (r === 'same' && !meta.dirty) syncStatus = 'Synced with Drive ✓';
+    else { await upload(); syncStatus = 'Synced with Drive ✓'; }
+  } catch (err) { failStatus(err); }
+  syncing = false;
+  if (pending) { pending = false; return syncToDrive(); }
   renderUserBar();
 }
+const loadFromDrive = syncToDrive;
 
-async function loadFromDrive() {
-  if (!data.driveAccessToken) return;
-  syncStatus = 'Fetching Cloud Data...';
-  renderUserBar();
-
-  try {
-    const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE_NAME}'&spaces=appDataFolder`, {
-      headers: { 'Authorization': `Bearer ${data.driveAccessToken}` }
-    });
-    const searchData = await searchRes.json();
-    if (searchData.files && searchData.files.length > 0) {
-      data.driveFileId = searchData.files[0].id;
-      const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${data.driveFileId}?alt=media`, {
-        headers: { 'Authorization': `Bearer ${data.driveAccessToken}` }
-      });
-      const cloudData = await fileRes.json();
-      if (cloudData && cloudData.currencies) {
-        data = migrateData(cloudData);
-        persistLocal();
-        renderAll();
-      }
-    }
-    syncStatus = 'Synced with Drive ✓';
-  } catch (err) {
-    console.error('Drive Load Error:', err);
-    syncStatus = 'Local Mode';
-  }
-  renderUserBar();
+function initGoogleDriveAuth(){
+  if (tokenClient || !(window.google && google.accounts && google.accounts.oauth2)) return;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+    callback: async (resp) => {
+      connecting = false; autoTried = false;
+      if (resp.error) { syncStatus = 'Sign-in error: ' + resp.error; renderUserBar(); return; }
+      data.driveAccessToken = resp.access_token;
+      tokenExpiry = Date.now() + ((resp.expires_in || 3600) - 60) * 1000;
+      try {
+        const u = await (await gfetch('https://www.googleapis.com/oauth2/v3/userinfo')).json();
+        data.userName = u.name; data.userEmail = u.email || 'Google account'; data.userPic = u.picture;
+      } catch (e) { data.userEmail = data.userEmail || 'Google account'; }
+      persistLocal(); await loadFromDrive();
+    },
+    error_callback: (e) => { connecting = false; syncStatus = 'Sign-in not completed (' + (e && e.type ? e.type : 'error') + ')'; renderUserBar(); }
+  });
+}
+function connect(){
+  if (connecting) return;
+  initGoogleDriveAuth();
+  if (!tokenClient) { syncStatus = 'Google sign-in not loaded – check internet and reload'; renderUserBar(); return; }
+  connecting = true;
+  tokenClient.requestAccessToken({ prompt: '', hint: data.userEmail && data.userEmail.includes('@') ? data.userEmail : undefined });
 }
 
-function initGoogleDriveAuth() {
-  if (window.google && window.google.accounts && window.google.accounts.oauth2) {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-      callback: async (response) => {
-        if (response.access_token) {
-          data.driveAccessToken = response.access_token;
-          
-          // Fetch user profile info
-          const userInfo = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { 'Authorization': `Bearer ${response.access_token}` }
-          }).then(res => res.json());
-
-          data.userName = userInfo.name;
-          data.userEmail = userInfo.email;
-          data.userPic = userInfo.picture;
-          
-          save();
-          loadFromDrive();
-        }
-      },
-    });
-  }
-}
-
-window.addEventListener('online', () => { if (data.driveAccessToken) syncToDrive(); });
+window.addEventListener('online', () => { if (hasToken()) syncToDrive(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && hasToken()) syncToDrive(); });
+setInterval(() => { if (!document.hidden && hasToken() && !syncing) syncToDrive(); }, 60000);
+document.addEventListener('click', () => { if (data.userEmail && !hasToken() && !autoTried) { autoTried = true; connect(); } });
 
 function cur(){ return data.currencies.find(c=>c.code===data.active); }
 function fmt(n){ n = n||0; return (n<0?'-':'') + Math.abs(n).toLocaleString(undefined,{maximumFractionDigits:2}); }
@@ -426,32 +420,24 @@ function renderManagePanel(){
     };
     reader.readAsText(file);
   };
-  document.getElementById('manualSyncBtn').onclick=()=>{ syncToDrive(); };
+  document.getElementById('manualSyncBtn').onclick=()=>{ if (hasToken()) syncToDrive(); else if (data.userEmail) connect(); else alert('Sign in with Google first.'); };
 }
 
 function renderUserBar(){
   const bar = document.getElementById('userBar');
-  const badge = `<span class="sync-badge">${syncStatus}</span>`;
-  
+  const badge = `<span class="sync-badge">${escapeHtml(syncStatus)}</span>`;
   if (data.userEmail) {
     const pic = data.userPic ? `<img src="${data.userPic}" alt="avatar">` : '👤';
-    bar.innerHTML = `<span class="userchip">${pic} <strong>${escapeHtml(data.userName||'User')}</strong> (${escapeHtml(data.userEmail)})</span> ${badge} <span class="x" id="logoutBtn">Sign Out</span>`;
+    const rc = hasToken() ? '' : ' <button class="btn ghost" id="reconnectBtn">🔄 Reconnect</button>';
+    bar.innerHTML = `<span class="userchip">${pic} <strong>${escapeHtml(data.userName||'User')}</strong> (${escapeHtml(data.userEmail)})</span> ${badge}${rc} <span class="x" id="logoutBtn">Sign Out</span>`;
+    const rb = document.getElementById('reconnectBtn'); if (rb) rb.onclick = connect;
     document.getElementById('logoutBtn').onclick = () => {
-      data.userName = null;
-      data.userEmail = null;
-      data.userPic = null;
-      data.driveAccessToken = null;
-      data.driveFileId = null;
-      syncStatus = 'Offline / Saved Locally';
-      save();
-      renderUserBar();
+      data.userName = null; data.userEmail = null; data.userPic = null; data.driveAccessToken = null; data.driveFileId = null; tokenExpiry = 0;
+      syncStatus = 'Offline / Saved Locally'; save(); renderUserBar();
     };
   } else {
     bar.innerHTML = `<button class="btn ghost" id="loginDriveBtn">🔑 Sign in with Google Drive Sync</button> ${badge}`;
-    document.getElementById('loginDriveBtn').onclick = () => {
-      if (!tokenClient) initGoogleDriveAuth();
-      if (tokenClient) tokenClient.requestAccessToken({ prompt: 'consent' });
-    };
+    document.getElementById('loginDriveBtn').onclick = connect;
   }
 }
 
@@ -827,7 +813,7 @@ function renderCardTable(c){
 }
 
 function renderAll(){ renderTabs(); renderContent(); renderUserBar(); }
-window.onload = () => { initGoogleDriveAuth(); renderAll(); };
+window.onload = () => { if (data.userEmail) syncStatus = 'Tap Reconnect to sync with Drive'; renderAll(); setTimeout(initGoogleDriveAuth, 800); };
 </script>
 </body>
 </html>
