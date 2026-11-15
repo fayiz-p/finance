@@ -76,6 +76,7 @@ td.debit .paycell .sum{color:var(--debit);}
 .tagcard{background:var(--head);padding:0 4px;border-radius:4px;font-size:9px;color:var(--card);}
 .addpay{cursor:pointer;color:var(--ink);font-size:10px;text-decoration:underline;text-align:center;}
 .remark-text{font-size:10px;color:var(--muted);font-style:italic;padding:1px 2px 3px 2px;}
+td.netcell{white-space:normal;line-height:1.4;}
 tr.topTotal td{background:var(--head);font-weight:600;text-align:center;}
 .note{color:var(--muted);font-size:11px;margin-top:8px;}
 .manage-panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:-8px 0 18px;}
@@ -312,6 +313,9 @@ function budgetNet(c,b){
   let cr=0,db=0;
   c.budgetMonths.forEach(m=>{ const v=m.vals[b.id]; if(v){ cr+=sumList(v.credit); db+=sumList(v.debit); } });
   return {cr,db,net:cr-db};
+}
+function netCellHTML(cr,db){
+  return `<td colspan="2" class="num netcell"><span class="pos">${fmt(cr)}</span> − <span class="neg">${fmt(db)}</span> = <b>${fmt(cr-db)}</b></td>`;
 }
 function budgetBalance(c,b){ return b.opening + budgetNet(c,b).net; }
 function completedBalanceSum(c){ let s=0; completedBudgets(c).forEach(b=>s+=budgetBalance(c,b)); return s; }
@@ -643,8 +647,8 @@ function _renderTransferTable(c){
   let allCredited=0, allTotal=0;
   c.budgetMonths.forEach(m=>{ allCredited+=monthCreditedSum(m); allTotal+=monthAllocated(m); });
   let topRow = `<tr class="topTotal"><td colspan="2">Net (all-time)</td><td class="num">—</td><td class="num">${fmt(allCredited-allTotal)}</td><td class="num">${fmt(allTotal)}</td>`
-    + budgets.map(b=>{ const n=budgetNet(c,b); return `<td colspan="2" class="num">${fmt(n.net)}</td>`; }).join('')
-    + (cb.length?`<td colspan="2" class="num">${fmt(completedNetAllTime(c))}</td>`:'') + '</tr>';
+    + budgets.map(b=>{ const n=budgetNet(c,b); return netCellHTML(n.cr,n.db); }).join('')
+    + (cb.length?(()=>{ let cr=0,db=0; cb.forEach(b=>{ const n=budgetNet(c,b); cr+=n.cr; db+=n.db; }); return netCellHTML(cr,db); })():'') + '</tr>';
 
   let head2 = '<tr><th></th><th></th><th></th><th></th><th></th>' + budgets.map(()=>`<th class="sub">Credit</th><th class="sub">Debit</th>`).join('')
     + (cb.length?'<th class="sub">Credit</th><th class="sub">Debit</th>':'') + '</tr>';
