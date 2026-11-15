@@ -105,7 +105,7 @@ tr.topTotal td{background:var(--head);font-weight:600;text-align:center;}
 </div>
 
 <script>
-const CLIENT_ID = "332350360983-h3ktnpfit3gu5ijve3juj5pjfn4si4d8.apps.googleusercontent.com"; // Replace with your Google OAuth Client ID
+const CLIENT_ID = "32350360983-h3ktnpfit3gu5ijve3juj5pjfn4si4d8.apps.googleusercontent.com"; // Replace with your Google OAuth Client ID
 const DRIVE_FILE_NAME = "finance-data.json";
 
 if ('serviceWorker' in navigator) {
@@ -365,7 +365,7 @@ function renderTabs(){
   const t = document.getElementById('tabs');
   t.innerHTML = data.currencies.map(c=>`<div class="tab ${c.code===data.active?'active':''}" data-code="${c.code}">${c.code}</div>`).join('')
     + `<div class="tab-add" id="manageBtn" title="Manage currency tabs">⚙</div>`;
-  t.querySelectorAll('.tab').forEach(el=>el.onclick=()=>{ data.active=el.dataset.code; renderAll(); });
+  t.querySelectorAll('.tab').forEach(el=>el.onclick=()=>{ data.active=el.dataset.code; renderAll(true); });
   document.getElementById('manageBtn').onclick=()=>{
     const mp = document.getElementById('managePanel');
     mp.style.display = mp.style.display==='none' ? 'block' : 'none';
@@ -630,7 +630,7 @@ function paymentCellHTML(list,type,monthId,budgetId,c){
   </div></td>`;
 }
 
-function renderTransferTable(c){
+function _renderTransferTable(c){
   const t = document.getElementById('transferTable');
   const budgets = activeBudgets(c);
   const cb = completedBudgets(c);
@@ -751,7 +751,7 @@ function renderTransferTable(c){
   });
 }
 
-function renderCardTable(c){
+function _renderCardTable(c){
   const t = document.getElementById('cardTable');
   if(!c.cards.length){ t.innerHTML='<tr><td class="empty">No credit cards yet.</td></tr>'; return; }
   let head1 = '<tr><th rowspan="2">Year</th><th rowspan="2">Month</th>' + c.cards.map(cd=>`<th colspan="2">${cd.name} <span class="x" data-editcard="${cd.id}">✎</span><span class="x" data-delcard="${cd.id}">×</span></th>`).join('') + '</tr>';
@@ -812,7 +812,17 @@ function renderCardTable(c){
   });
 }
 
-function renderAll(){ renderTabs(); renderContent(); renderUserBar(); }
+function renderTransferTable(c){ keepScroll(() => _renderTransferTable(c)); }
+function renderCardTable(c){ keepScroll(() => _renderCardTable(c)); }
+// Scroll lock: remember page + table scroll positions, redraw, then put them back
+function keepScroll(fn, resetTables){
+  const wx = window.scrollX, wy = window.scrollY;
+  const tw = Array.from(document.querySelectorAll('.tw')).map(e => [e.scrollLeft, e.scrollTop]);
+  fn();
+  if (!resetTables) document.querySelectorAll('.tw').forEach((e, i) => { if (tw[i]) { e.scrollLeft = tw[i][0]; e.scrollTop = tw[i][1]; } });
+  window.scrollTo(wx, wy);
+}
+function renderAll(resetTables){ keepScroll(() => { renderTabs(); renderContent(); renderUserBar(); }, resetTables === true); }
 window.onload = () => { if (data.userEmail) syncStatus = 'Tap Reconnect to sync with Drive'; renderAll(); setTimeout(initGoogleDriveAuth, 800); };
 </script>
 </body>
